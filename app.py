@@ -1,11 +1,17 @@
 import streamlit as st
 import pandas as pd
-import os
-
-FILE = "album_data.csv"
+from supabase import create_client
 
 # -------------------------
-# LISTA DE ESTAMPAS (TUYA)
+# CONFIG SUPABASE
+# -------------------------
+url = "https://pbogddjphxhilwiqbulq.supabase.co/rest/v1/"
+key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
+
+supabase = create_client(url, key)
+
+# -------------------------
+# LISTA DE ESTAMPAS (PEGA TODA TU LISTA)
 # -------------------------
 raw_data = """
 PANINI-00	RSA1	CZE1	BIH1	SUI1	MARR1	SCO1	PAR1	TUR1	CUW1	ECU1	JPN1	TUN1	BEL1	IRN1	ESP1	KSA1	FRA1	IRQ1	ARG1	AUT1	POR1	UZB1	ENG1	GHA1	FWC9
@@ -38,7 +44,8 @@ MEX18	KOR7	CAN7	QAT7	BRA7	HAI7	USA7	AUS7	GER7	CIV7	NED7	SWE7	CC7	EGY7	NZL7	CPV7	
 MEX19	KOR8	CAN8	QAT8	BRA8	HAI8	USA8	AUS8	GER8	CIV8	NED8	SWE8	CC8	EGY8	NZL8	CPV8	URU8	SEN8	NOR8	ALG8	JOR8	COD8	COL8	CRO8	PAN8	
 MEX20	KOR9	CAN9	QAT9	BRA9	HAI9	USA9	AUS9	GER9	CIV9	NED9	SWE9	CC9	EGY9	NZL9	CPV9	URU9	SEN9	NOR9	ALG9	JOR9	COD9	COL9	CRO9	PAN9	
 KOR10	CAN10	QAT10	BRA10	HAI10	USA10	AUS10	GER10	CIV10	NED10	SWE10	CC10	EGY10	NZL10	CPV10	URU10	SEN10	NOR10	ALG10	JOR10	COD10	COL10	CRO10	PAN10	
-KOR11	CAN11	QAT11	BRA11	HAI11	USA11	AUS11	GER11	CIV11	NED11	SWE11	CC11	EGY11	NZL11	CPV11	URU11	SEN11	NOR11	ALG11	JOR11	COD11	COL11	CRO11	PAN11		KOR12	CAN12	QAT12	BRA12	HAI12	USA12	AUS12	GER12	CIV12	NED12	SWE12	CC12	EGY12	NZL12	CPV12	URU12	SEN12	NOR12	ALG12	JOR12	COD12	COL12	CRO12	PAN12	
+KOR11	CAN11	QAT11	BRA11	HAI11	USA11	AUS11	GER11	CIV11	NED11	SWE11	CC11	EGY11	NZL11	CPV11	URU11	SEN11	NOR11	ALG11	JOR11	COD11	COL11	CRO11	PAN11	
+KOR12	CAN12	QAT12	BRA12	HAI12	USA12	AUS12	GER12	CIV12	NED12	SWE12	CC12	EGY12	NZL12	CPV12	URU12	SEN12	NOR12	ALG12	JOR12	COD12	COL12	CRO12	PAN12	
 KOR13	CAN13	QAT13	BRA13	HAI13	USA13	AUS13	GER13	CIV13	NED13	SWE13	CC13	EGY13	NZL13	CPV13	URU13	SEN13	NOR13	ALG13	JOR13	COD13	COL13	CRO13	PAN13	
 KOR14	CAN14	QAT14	BRA14	HAI14	USA14	AUS14	GER14	CIV14	NED14	SWE14	CC14	EGY14	NZL14	CPV14	URU14	SEN14	NOR14	ALG14	JOR14	COD14	COL14	CRO14	PAN14	
 KOR15	CAN15	QAT15	BRA15	HAI15	USA15	AUS15	GER15	CIV15	NED15	SWE15		EGY15	NZL15	CPV15	URU15	SEN15	NOR15	ALG15	JOR15	COD15	COL15	CRO15	PAN15	
@@ -50,84 +57,84 @@ KOR20	CAN20	QAT20	BRA20	HAI20	USA20	AUS20	GER20	CIV20	NED20	SWE20		EGY20	NZL20	C
 
 """
 
-# Convertir a lista
 stickers = []
 for line in raw_data.strip().split("\n"):
     stickers.extend(line.split())
 
-TOTAL = len(stickers)
-
-# -------------------------
-# Crear CSV si no existe
-# -------------------------
-if not os.path.exists(FILE):
-    df = pd.DataFrame({
-        "Estampa": stickers,
-        "Tengo": [0]*TOTAL,
-        "Repetidas": [0]*TOTAL
-    })
-    df.to_csv(FILE, index=False)
-else:
-    df = pd.read_csv(FILE)
-
-# -------------------------
-# Guardar
-# -------------------------
-def save_data():
-    df.to_csv(FILE, index=False)
-
 # -------------------------
 # UI
 # -------------------------
-st.title("📘 Álbum Panini 2026 PRO")
+st.title("📘 Álbum Panini PRO")
 
-tienes = df["Tengo"].sum()
-faltan = TOTAL - tienes
-repetidas = df["Repetidas"].sum()
-porcentaje = (tienes / TOTAL) * 100
+user = st.text_input("👤 Usuario")
 
-col1, col2, col3, col4 = st.columns(4)
+if user == "":
+    st.warning("Pon tu nombre para empezar")
+    st.stop()
+
+# -------------------------
+# CARGAR DATOS DEL USUARIO
+# -------------------------
+response = supabase.table("album").select("*").eq("user_id", user).execute()
+data = response.data
+
+# -------------------------
+# SI NO EXISTE → CREARLO
+# -------------------------
+if len(data) == 0:
+    for s in stickers:
+        supabase.table("album").insert({
+            "user_id": user,
+            "estampa": s,
+            "tengo": 0,
+            "repetidas": 0
+        }).execute()
+
+    response = supabase.table("album").select("*").eq("user_id", user).execute()
+    data = response.data
+
+df = pd.DataFrame(data)
+
+# -------------------------
+# MÉTRICAS
+# -------------------------
+tienes = df["tengo"].sum()
+total = len(df)
+faltan = total - tienes
+
+col1, col2, col3 = st.columns(3)
 
 col1.metric("Tienes", int(tienes))
 col2.metric("Faltan", int(faltan))
-col3.metric("%", f"{porcentaje:.2f}%")
-col4.metric("Repetidas", int(repetidas))
-
-st.progress(porcentaje/100)
+col3.metric("%", f"{(tienes/total)*100:.2f}%")
 
 # -------------------------
-# BUSCADOR (MEJORADO)
+# EDITAR ESTAMPAS
 # -------------------------
-st.subheader("🔍 Buscar estampa")
+selected = st.selectbox("Selecciona estampa", df["estampa"])
 
-selected = st.selectbox("Selecciona estampa", df["Estampa"])
-
-row = df[df["Estampa"] == selected]
+row = df[df["estampa"] == selected]
 idx = row.index[0]
 
-tengo = st.checkbox("La tengo", value=bool(df.at[idx, "Tengo"]))
-
-repetidas_input = st.number_input(
-    "Repetidas",
-    min_value=0,
-    value=int(df.at[idx, "Repetidas"]),
-    step=1
-)
+tengo = st.checkbox("La tengo", value=bool(df.at[idx, "tengo"]))
+reps = st.number_input("Repetidas", value=int(df.at[idx, "repetidas"]))
 
 if st.button("Guardar"):
-    df.at[idx, "Tengo"] = int(tengo)
-    df.at[idx, "Repetidas"] = repetidas_input
-    save_data()
-    st.success("Guardado ✅")
+    supabase.table("album").update({
+        "tengo": int(tengo),
+        "repetidas": reps
+    }).eq("user_id", user).eq("estampa", selected).execute()
+
+    st.success("Guardado en la nube 🔥")
 
 # -------------------------
 # FALTANTES
 # -------------------------
 st.subheader("❌ Faltantes")
-st.dataframe(df[df["Tengo"] == 0])
+st.dataframe(df[df["tengo"] == 0])
 
 # -------------------------
 # REPETIDAS
 # -------------------------
 st.subheader("🔁 Repetidas")
-st.dataframe(df[df["Repetidas"] > 0])
+st.dataframe(df[df["repetidas"] > 0])
