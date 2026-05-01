@@ -75,7 +75,7 @@ if user == "":
 # -------------------------
 # CARGAR DATOS DEL USUARIO
 # -------------------------
-response = supabase.table("album").select("*").eq("user_id", user).execute()
+response = supabase.table("album").select("*").execute()
 data = response.data
 
 # -------------------------
