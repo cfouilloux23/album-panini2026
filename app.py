@@ -10,7 +10,7 @@ key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 supabase = create_client(url, key)
 
 # -------------------------
-# GENERACIÓN DE LISTA MAESTRA
+# GENERACIÓN DE LISTA MAESTRA (Rangos solicitados)
 # -------------------------
 paises = [
     "MEX", "RSA", "CZE", "BIH", "SUI", "MARR", "SCO", "PAR", "TUR", "CUW", 
@@ -20,7 +20,6 @@ paises = [
     "SEN", "NOR", "ALG", "JOR", "COD", "COL", "CRO", "PAN"
 ]
 
-# Diccionario para agrupar estampas por sección en la UI
 secciones_master = {
     "ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
     "COPA CONFEDERACIONES": [f"CC{i}" for i in range(1, 15)]
@@ -31,8 +30,8 @@ for p in paises:
 # -------------------------
 # UI INICIAL
 # -------------------------
-st.set_page_config(page_title="Álbum Checklist 2026", layout="wide")
-st.title("📋 Checklist Mundial 2026")
+st.set_page_config(page_title="Álbum Pro 2026", layout="wide")
+st.title("📋 Gestión Total: Checklist y Repetidas")
 
 user_input = st.text_input("👤 Usuario", placeholder="Tu nombre...")
 user = user_input.strip().lower()
@@ -61,49 +60,68 @@ if len(data) == 0:
 df = pd.DataFrame(data)
 
 # -------------------------
-# MÉTRICAS RÁPIDAS
+# MÉTRICAS
 # -------------------------
 tienes = df["tengo"].sum()
 total = len(df)
-c1, c2, c3 = st.columns(3)
+reps_totales = df["repetidas"].sum()
+
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Obtenidas", f"{int(tienes)} / {total}")
 c2.metric("Faltan", int(total - tienes))
-c3.metric("Progreso", f"{(tienes/total)*100:.1f}%")
+c3.metric("Total Repetidas", int(reps_totales))
+c4.metric("Progreso", f"{(tienes/total)*100:.1f}%")
 
 # -------------------------
-# INTERFAZ DE CHECKLIST
+# INTERFAZ DE CHECKLIST + REPETIDAS
 # -------------------------
-st.subheader("Selecciona las estampas que ya tienes:")
-st.info("💡 Abre cada sección, marca tus estampas y dale al botón 'Guardar Cambios' al final.")
+st.info("💡 Marca las que tienes y usa los números para las repetidas. ¡No olvides Guardar!")
 
-# Diccionario para guardar los nuevos estados temporalmente
-nuevos_estados = {}
+# Diccionarios para capturar cambios
+cambios_tengo = {}
+cambios_reps = {}
 
-# Generar los acordeones por sección
 for nombre_seccion, lista_estampas in secciones_master.items():
     with st.expander(f"📍 {nombre_seccion}"):
-        # Creamos columnas para que las casillas no ocupen mucho espacio vertical
-        cols = st.columns(5) 
+        # Usamos 4 columnas para que quepa bien el checkbox y el número
+        cols = st.columns(4) 
         for index, s_id in enumerate(lista_estampas):
-            # Buscar el estado actual en el dataframe
-            valor_actual = bool(df[df["estampa"] == s_id]["tengo"].values[0])
+            # Obtener datos actuales
+            row = df[df["estampa"] == s_id]
+            val_tengo = bool(row["tengo"].values[0])
+            val_reps = int(row["repetidas"].values[0])
             
-            # Colocar el checkbox en la columna correspondiente
-            with cols[index % 5]:
-                check = st.checkbox(s_id, value=valor_actual, key=f"cb_{s_id}")
-                nuevos_estados[s_id] = 1 if check else 0
+            with cols[index % 4]:
+                st.markdown(f"**{s_id}**")
+                # Fila interna para checkbox y repetidas
+                sub_c1, sub_c2 = st.columns([1, 1.5])
+                with sub_c1:
+                    check = st.checkbox("Tengo", value=val_tengo, key=f"t_{s_id}", label_visibility="collapsed")
+                    cambios_tengo[s_id] = 1 if check else 0
+                with sub_c2:
+                    n_reps = st.number_input("Reps", min_value=0, value=val_reps, key=f"r_{s_id}", label_visibility="collapsed")
+                    cambios_reps[s_id] = n_reps
+                st.write("---")
 
 # -------------------------
-# BOTÓN DE GUARDADO MASIVO
+# GUARDADO MASIVO
 # -------------------------
 st.divider()
-if st.button("💾 GUARDAR CAMBIOS EN LA NUBE", use_container_width=True, type="primary"):
-    with st.spinner("Actualizando base de datos..."):
-        # Solo actualizamos las que cambiaron para ahorrar recursos
-        for s_id, nuevo_val in nuevos_estados.items():
-            valor_viejo = int(df[df["estampa"] == s_id]["tengo"].values[0])
-            if nuevo_val != valor_viejo:
-                supabase.table("album").update({"tengo": nuevo_val}).eq("user_id", user).eq("estampa", s_id).execute()
+if st.button("💾 GUARDAR TODOS LOS CAMBIOS", use_container_width=True, type="primary"):
+    with st.spinner("Sincronizando con la nube..."):
+        for s_id in cambios_tengo.keys():
+            v_tengo = cambios_tengo[s_id]
+            v_reps = cambios_reps[s_id]
+            
+            # Solo actualizar si algo cambió para que sea más rápido
+            old_t = int(df[df["estampa"] == s_id]["tengo"].values[0])
+            old_r = int(df[df["estampa"] == s_id]["repetidas"].values[0])
+            
+            if v_tengo != old_t or v_reps != old_r:
+                supabase.table("album").update({
+                    "tengo": v_tengo,
+                    "repetidas": v_reps
+                }).eq("user_id", user).eq("estampa", s_id).execute()
     
-    st.success("¡Datos actualizados correctamente! 🔥")
+    st.success("¡Todo guardado! 🔥")
     st.rerun()
