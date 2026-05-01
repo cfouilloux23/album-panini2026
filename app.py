@@ -48,7 +48,7 @@ for p in paises:
 # UI - INTERFAZ
 # -------------------------
 st.set_page_config(page_title="Álbum Panini PRO", page_icon="📘")
-st.title("📘 Álbum Panini PRO")
+st.title("📘 Álbum Mundial 2026")
 
 user_input = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
 user = user_input.strip().lower()
