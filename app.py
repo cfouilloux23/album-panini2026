@@ -10,47 +10,61 @@ key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 supabase = create_client(url, key)
 
 # -------------------------
-# GENERACIÓN DE LISTA MAESTRA (Rangos solicitados)
+# DICCIONARIO DE BANDERAS (Emoji literal)
 # -------------------------
-paises = [
-    "MEX", "RSA", "CZE", "BIH", "SUI", "MARR", "SCO", "PAR", "TUR", "CUW", 
-    "ECU", "JPN", "TUN", "BEL", "IRN", "ESP", "KSA", "FRA", "IRQ", "ARG", 
-    "AUT", "POR", "UZB", "ENG", "GHA", "KOR", "CAN", "QAT", "BRA", "HAI", 
-    "USA", "AUS", "GER", "CIV", "NED", "SWE", "EGY", "NZL", "CPV", "URU", 
-    "SEN", "NOR", "ALG", "JOR", "COD", "COL", "CRO", "PAN"
-]
-
-secciones_master = {
-    "ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
-    "COPA CONFEDERACIONES": [f"CC{i}" for i in range(1, 15)]
+# Aquí asociamos el código que usas con su bandera real
+banderas = {
+    "MEX": "🇲🇽", "RSA": "🇿🇦", "CZE": "🇨🇿", "BIH": "🇧🇦", "SUI": "🇨🇭", "MARR": "🇲🇦", 
+    "SCO": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "PAR": "🇵🇾", "TUR": "🇹🇷", "CUW": "🇨🇼", "ECU": "🇪🇨", "JPN": "🇯🇵", 
+    "TUN": "🇹🇳", "BEL": "🇧🇪", "IRN": "🇮🇷", "ESP": "🇪🇸", "KSA": "🇸🇦", "FRA": "🇫🇷", 
+    "IRQ": "🇮🇶", "ARG": "🇦🇷", "AUT": "🇦🇹", "POR": "🇵🇹", "UZB": "🇺🇿", "ENG": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", 
+    "GHA": "🇬🇭", "KOR": "🇰🇷", "CAN": "🇨🇦", "QAT": "🇶🇦", "BRA": "🇧🇷", "HAI": "🇭🇹", 
+    "USA": "🇺🇸", "AUS": "🇦🇺", "GER": "🇩🇪", "CIV": "🇨🇮", "NED": "🇳🇱", "SWE": "🇸🇪", 
+    "EGY": "🇪🇬", "NZL": "🇳🇿", "CPV": "🇨🇻", "URU": "🇺🇾", "SEN": "🇸🇳", "NOR": "🇳🇴", 
+    "ALG": "🇩🇿", "JOR": "🇯🇴", "COD": "🇨🇩", "COL": "🇨🇴", "CRO": "🇭🇷", "PAN": "🇵🇦"
 }
-for p in paises:
-    secciones_master[p] = [f"{p}{i}" for i in range(1, 21)]
 
 # -------------------------
-# UI INICIAL
+# GENERACIÓN DE SECCIONES
 # -------------------------
-st.set_page_config(page_title="Álbum Pro 2026", layout="wide")
-st.title("📋 Gestión Total: Checklist y Repetidas")
+paises_lista = list(banderas.keys())
 
-user_input = st.text_input("👤 Usuario", placeholder="Tu nombre...")
+# Estructura del álbum con los rangos que me pediste
+secciones_master = {
+    "✨ ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
+    "🏆 COCA COLA": [f"CC{i}" for i in range(1, 15)]
+}
+
+# Añadimos los países con su bandera literal al título
+for p in paises_lista:
+    titulo = f"{banderas[p]} {p}"
+    secciones_master[titulo] = [f"{p}{i}" for i in range(1, 21)]
+
+# -------------------------
+# UI STREAMLIT
+# -------------------------
+st.set_page_config(page_title="Álbum Mundial 2026", layout="wide")
+st.title("📘 Mi Álbum Panini 2026")
+
+user_input = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
 user = user_input.strip().lower()
 
 if not user:
-    st.warning("Ingresa tu nombre para continuar.")
+    st.info("Ingresa tu nombre para ver tus estampas.")
     st.stop()
 
 # -------------------------
-# DATA LOGIC
+# LÓGICA DE DATOS
 # -------------------------
 response = supabase.table("album").select("*").eq("user_id", user).execute()
 data = response.data
 
+# Si es usuario nuevo, crear álbum
 if len(data) == 0:
-    with st.spinner("Generando álbum inicial..."):
+    with st.spinner("Creando tu álbum por primera vez..."):
         all_stickers = []
-        for s_list in secciones_master.values():
-            all_stickers.extend(s_list)
+        for lista in secciones_master.values():
+            all_stickers.extend(lista)
         
         batch = [{"user_id": user, "estampa": s, "tengo": 0, "repetidas": 0} for s in all_stickers]
         for i in range(0, len(batch), 500):
@@ -59,69 +73,58 @@ if len(data) == 0:
 
 df = pd.DataFrame(data)
 
-# -------------------------
-# MÉTRICAS
-# -------------------------
-tienes = df["tengo"].sum()
-total = len(df)
-reps_totales = df["repetidas"].sum()
+# Métricas
+t1, t2, t3 = st.columns(3)
+t1.metric("Obtenidas", f"{int(df['tengo'].sum())} / {len(df)}")
+t2.metric("Repetidas", int(df['repetidas'].sum()))
+t3.metric("Progreso", f"{(df['tengo'].sum()/len(df))*100:.1f}%")
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Obtenidas", f"{int(tienes)} / {total}")
-c2.metric("Faltan", int(total - tienes))
-c3.metric("Total Repetidas", int(reps_totales))
-c4.metric("Progreso", f"{(tienes/total)*100:.1f}%")
+st.divider()
 
 # -------------------------
-# INTERFAZ DE CHECKLIST + REPETIDAS
+# CHECKLIST VISUAL
 # -------------------------
-st.info("💡 Marca las que tienes y usa los números para las repetidas. ¡No olvides Guardar!")
-
-# Diccionarios para capturar cambios
+# Variables para guardar cambios
 cambios_tengo = {}
 cambios_reps = {}
 
-for nombre_seccion, lista_estampas in secciones_master.items():
-    with st.expander(f"📍 {nombre_seccion}"):
-        # Usamos 4 columnas para que quepa bien el checkbox y el número
-        cols = st.columns(4) 
-        for index, s_id in enumerate(lista_estampas):
-            # Obtener datos actuales
-            row = df[df["estampa"] == s_id]
-            val_tengo = bool(row["tengo"].values[0])
-            val_reps = int(row["repetidas"].values[0])
+# Crear los acordeones (Expanders)
+for seccion, lista_est in secciones_master.items():
+    with st.expander(seccion):
+        # 4 columnas por fila para que se vea ordenado
+        cols = st.columns(4)
+        for i, cod in enumerate(lista_est):
+            # Obtener datos actuales de la base
+            info = df[df["estampa"] == cod].iloc[0]
             
-            with cols[index % 4]:
-                st.markdown(f"**{s_id}**")
-                # Fila interna para checkbox y repetidas
-                sub_c1, sub_c2 = st.columns([1, 1.5])
-                with sub_c1:
-                    check = st.checkbox("Tengo", value=val_tengo, key=f"t_{s_id}", label_visibility="collapsed")
-                    cambios_tengo[s_id] = 1 if check else 0
-                with sub_c2:
-                    n_reps = st.number_input("Reps", min_value=0, value=val_reps, key=f"r_{s_id}", label_visibility="collapsed")
-                    cambios_reps[s_id] = n_reps
+            with cols[i % 4]:
+                st.write(f"**{cod}**")
+                c_check, c_num = st.columns([1, 1.2])
+                with c_check:
+                    t = st.checkbox("T", value=bool(info["tengo"]), key=f"t_{cod}", label_visibility="collapsed")
+                    cambios_tengo[cod] = 1 if t else 0
+                with c_num:
+                    r = st.number_input("R", min_value=0, value=int(info["repetidas"]), key=f"r_{cod}", label_visibility="collapsed")
+                    cambios_reps[cod] = r
                 st.write("---")
 
 # -------------------------
-# GUARDADO MASIVO
+# BOTÓN GUARDAR
 # -------------------------
-st.divider()
 if st.button("💾 GUARDAR TODOS LOS CAMBIOS", use_container_width=True, type="primary"):
-    with st.spinner("Sincronizando con la nube..."):
-        for s_id in cambios_tengo.keys():
-            v_tengo = cambios_tengo[s_id]
-            v_reps = cambios_reps[s_id]
+    with st.spinner("Sincronizando..."):
+        for cod in cambios_tengo.keys():
+            nuevo_t = cambios_tengo[cod]
+            nuevo_r = cambios_reps[cod]
             
-            # Solo actualizar si algo cambió para que sea más rápido
-            old_t = int(df[df["estampa"] == s_id]["tengo"].values[0])
-            old_r = int(df[df["estampa"] == s_id]["repetidas"].values[0])
-            
-            if v_tengo != old_t or v_reps != old_r:
+            # Solo subir a Supabase si el usuario cambió algo
+            if nuevo_t != int(df[df["estampa"] == cod]["tengo"].iloc[0]) or \
+               nuevo_r != int(df[df["estampa"] == cod]["repetidas"].iloc[0]):
+                
                 supabase.table("album").update({
-                    "tengo": v_tengo,
-                    "repetidas": v_reps
-                }).eq("user_id", user).eq("estampa", s_id).execute()
+                    "tengo": nuevo_t,
+                    "repetidas": nuevo_r
+                }).eq("user_id", user).eq("estampa", cod).execute()
     
-    st.success("¡Todo guardado! 🔥")
+    st.success("¡Cambios guardados con éxito! 🚀")
     st.rerun()
