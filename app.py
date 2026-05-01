@@ -10,7 +10,7 @@ key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 supabase = create_client(url, key)
 
 # -------------------------
-# GENERACIÓN DE LISTA MAESTRA (SIN BANDERAS)
+# GENERACIÓN DE LISTA MAESTRA
 # -------------------------
 paises = [
     "MEX", "RSA", "CZE", "BIH", "SUI", "MARR", "SCO", "PAR", "TUR", "CUW", 
@@ -22,7 +22,7 @@ paises = [
 
 secciones_master = {
     "ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
-    "COCA COLA": [f"CC{i}" for i in range(1, 15)]
+    "COPA CONFEDERACIONES": [f"CC{i}" for i in range(1, 15)]
 }
 for p in paises:
     secciones_master[p] = [f"{p}{i}" for i in range(1, 21)]
@@ -31,7 +31,7 @@ for p in paises:
 # UI INICIAL
 # -------------------------
 st.set_page_config(page_title="Álbum Pro 2026", layout="wide")
-st.title("📘 Mi Álbum Mundial 2026")
+st.title("📘 Gestión de Álbum 2026")
 
 user_input = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
 user = user_input.strip().lower()
@@ -58,10 +58,21 @@ if len(data) == 0:
 df = pd.DataFrame(data)
 
 # Métricas
+tienes_total = int(df["tengo"].sum())
 t1, t2, t3 = st.columns(3)
-t1.metric("Tienes", int(df["tengo"].sum()))
+t1.metric("Tienes (Marcadas)", tienes_total)
 t2.metric("Repetidas Totales", int(df["repetidas"].sum()))
-t3.metric("Faltantes", int(len(df) - df["tengo"].sum()))
+t3.metric("Faltantes", int(len(df) - tienes_total))
+
+# --- NUEVA SECCIÓN: AUDITORÍA DE SELECCIONADAS ---
+with st.expander("🔍 VER LISTA DE LAS QUE YA TIENES (Para revisar errores)"):
+    df_tengo = df[df["tengo"] == 1][["estampa"]]
+    if not df_tengo.empty:
+        st.write(f"Estas son las {len(df_tengo)} estampas que tienes marcadas actualmente:")
+        st.dataframe(df_tengo, use_container_width=True, hide_index=True)
+    else:
+        st.write("No tienes ninguna estampa marcada todavía.")
+# ------------------------------------------------
 
 st.warning("⚠️ Recuerda darle al botón 'GUARDAR TODOS LOS CAMBIOS' al final antes de salir.")
 
@@ -75,7 +86,6 @@ for seccion, lista in secciones_master.items():
     with st.expander(seccion):
         cols = st.columns(4)
         for i, cod in enumerate(lista):
-            # Buscar info actual
             info = df[df["estampa"] == cod].iloc[0]
             with cols[i % 4]:
                 st.write(f"**{cod}**")
@@ -98,7 +108,6 @@ if st.button("💾 GUARDAR TODOS LOS CAMBIOS", use_container_width=True, type="p
             nt, nr = cambios_tengo[cod], cambios_reps[cod]
             ot, or_old = int(df[df["estampa"] == cod]["tengo"].iloc[0]), int(df[df["estampa"] == cod]["repetidas"].iloc[0])
             
-            # Solo actualizamos si hubo cambios para que sea más rápido
             if nt != ot or nr != or_old:
                 supabase.table("album").update({"tengo": nt, "repetidas": nr}).eq("user_id", user).eq("estampa", cod).execute()
     st.success("¡Datos guardados! 🔥")
