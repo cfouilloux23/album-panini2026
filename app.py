@@ -5,7 +5,6 @@ from supabase import create_client
 # -------------------------
 # CONFIG SUPABASE
 # -------------------------
-# Se eliminó el "/rest/v1/" de la URL para evitar errores de conexión
 url = "https://pbogddjphxhilwiqbulq.supabase.co"
 key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 
@@ -25,22 +24,29 @@ prefijos = [
 
 stickers = []
 for p in prefijos:
-    # Ajuste de rangos: la mayoría son 1-20
-    limite = 21 if p not in ["PANINI", "WC", "FWC"] else 20 
+    # Determinamos el límite para que no se salte números
+    # range(1, 21) genera del 1 al 20
+    if p in ["PANINI", "WC", "FWC"]:
+        limite = 20 
+    else:
+        limite = 21 
+
     for i in range(1, limite):
+        # Lógica de nombrado: PANINI-1, PANINI-2... vs MEX1, MEX2...
         codigo = f"{p}-{i}" if p == "PANINI" else f"{p}{i}"
         stickers.append(codigo)
 
-# Agregar la estampa especial 00
+# Estampa especial inicial
 if "PANINI-00" not in stickers: 
     stickers.insert(0, "PANINI-00")
 
 # -------------------------
-# UI
+# UI - INTERFAZ DE USUARIO
 # -------------------------
+st.set_page_config(page_title="Álbum Panini PRO", page_icon="📘")
 st.title("📘 Álbum Panini PRO")
 
-user = st.text_input("👤 Usuario")
+user = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
 
 if user == "":
     st.warning("Pon tu nombre para empezar")
@@ -49,23 +55,24 @@ if user == "":
 # -------------------------
 # CARGAR DATOS DEL USUARIO
 # -------------------------
-# Línea 78 corregida para filtrar por usuario
 response = supabase.table("album").select("*").eq("user_id", user).execute()
 data = response.data
 
 # -------------------------
-# SI EL USUARIO NO TIENE ÁLBUM → CREARLO
+# SI EL USUARIO NO TIENE ÁLBUM → CREARLO (OPTIMIZADO)
 # -------------------------
 if len(data) == 0:
-    st.info("Creando tu álbum por primera vez, espera un momento...")
-    for s in stickers:
-        supabase.table("album").insert({
-            "user_id": user,
-            "estampa": s,
-            "tengo": 0,
-            "repetidas": 0
-        }).execute()
+    with st.spinner("🚀 Generando álbum completo... esto será rápido"):
+        # Preparamos todas las filas en una lista (Bulk Insert)
+        batch_stickers = [
+            {"user_id": user, "estampa": s, "tengo": 0, "repetidas": 0} 
+            for s in stickers
+        ]
+        
+        # Enviamos TODO de un solo golpe
+        supabase.table("album").insert(batch_stickers).execute()
 
+    st.success("¡Álbum creado exitosamente!")
     # Recargar datos después de la inserción
     response = supabase.table("album").select("*").eq("user_id", user).execute()
     data = response.data
@@ -73,49 +80,58 @@ if len(data) == 0:
 df = pd.DataFrame(data)
 
 # -------------------------
-# MÉTRICAS
+# MÉTRICAS PRINCIPALES
 # -------------------------
 tienes = df["tengo"].sum()
 total = len(df)
 faltan = total - tienes
 
 col1, col2, col3 = st.columns(3)
-
 col1.metric("Tienes", int(tienes))
 col2.metric("Faltan", int(faltan))
-col3.metric("%", f"{(tienes/total)*100:.2f}%")
+col3.metric("% Completado", f"{(tienes/total)*100:.2f}%")
 
 # -------------------------
 # EDITAR ESTAMPAS
 # -------------------------
 st.divider()
-selected = st.selectbox("🔍 Selecciona estampa", df["estampa"].unique())
+st.subheader("📝 Gestionar Estampas")
 
+# Ordenamos los códigos para que sea fácil buscarlos
+lista_codigos = sorted(df["estampa"].unique())
+selected = st.selectbox("Busca o selecciona una estampa", lista_codigos)
+
+# Obtener datos de la estampa seleccionada
 row = df[df["estampa"] == selected]
 idx = row.index[0]
 
-# Interfaz para actualizar estado
-tengo = st.checkbox("La tengo", value=bool(df.at[idx, "tengo"]))
-reps = st.number_input("Repetidas", value=int(df.at[idx, "repetidas"]), min_value=0)
+c1, c2 = st.columns(2)
+with c1:
+    tengo = st.checkbox("La tengo", value=bool(df.at[idx, "tengo"]))
+with c2:
+    reps = st.number_input("Cantidad de repetidas", value=int(df.at[idx, "repetidas"]), min_value=0)
 
-if st.button("Guardar Cambios"):
+if st.button("Guardar cambios", use_container_width=True):
     supabase.table("album").update({
         "tengo": int(tengo),
         "repetidas": reps
     }).eq("user_id", user).eq("estampa", selected).execute()
     
-    st.success(f"¡{selected} actualizada! Refrescando...")
+    st.toast(f"¡{selected} actualizada!")
     st.rerun()
 
 # -------------------------
-# TABLAS DE CONTROL
+# VISUALIZACIÓN DE TABLAS
 # -------------------------
+st.divider()
 tab1, tab2 = st.tabs(["❌ Faltantes", "🔁 Repetidas"])
 
 with tab1:
-    st.subheader("Estampas que te faltan")
-    st.dataframe(df[df["tengo"] == 0][["estampa"]])
+    st.write(f"Te faltan {int(faltan)} estampas")
+    df_faltantes = df[df["tengo"] == 0][["estampa"]]
+    st.dataframe(df_faltantes, use_container_width=True, hide_index=True)
 
 with tab2:
-    st.subheader("Tus repetidas para cambiar")
-    st.dataframe(df[df["repetidas"] > 0][["estampa", "repetidas"]])
+    df_repetidas = df[df["repetidas"] > 0][["estampa", "repetidas"]]
+    st.write(f"Tienes {len(df_repetidas)} modelos repetidos")
+    st.dataframe(df_repetidas, use_container_width=True, hide_index=True)
