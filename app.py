@@ -22,7 +22,7 @@ paises = [
 
 secciones_master = {
     "ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
-    "COPA CONFEDERACIONES": [f"CC{i}" for i in range(1, 15)]
+    "COCA COLA": [f"CC{i}" for i in range(1, 15)]
 }
 for p in paises:
     secciones_master[p] = [f"{p}{i}" for i in range(1, 21)]
@@ -31,7 +31,7 @@ for p in paises:
 # UI INICIAL
 # -------------------------
 st.set_page_config(page_title="Álbum Pro 2026", layout="wide")
-st.title("📘 Gestión de Álbum 2026")
+st.title("📘 Mi Álbum Mundial 2026")
 
 user_input = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
 user = user_input.strip().lower()
