@@ -10,7 +10,7 @@ key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 supabase = create_client(url, key)
 
 # -------------------------
-# GENERACIÓN DE LISTA MAESTRA (Rangos solicitados)
+# GENERACIÓN DE LISTA MAESTRA (SIN BANDERAS)
 # -------------------------
 paises = [
     "MEX", "RSA", "CZE", "BIH", "SUI", "MARR", "SCO", "PAR", "TUR", "CUW", 
@@ -21,8 +21,8 @@ paises = [
 ]
 
 secciones_master = {
-    " ✨ ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
-    " 🥤 COCA COLA": [f"CC{i}" for i in range(1, 15)]
+    "ESPECIALES": ["PANINI 00"] + [f"WC {i}" for i in range(1, 9)] + [f"FWC{i}" for i in range(9, 20)],
+    "COPA CONFEDERACIONES": [f"CC{i}" for i in range(1, 15)]
 }
 for p in paises:
     secciones_master[p] = [f"{p}{i}" for i in range(1, 21)]
@@ -31,13 +31,13 @@ for p in paises:
 # UI INICIAL
 # -------------------------
 st.set_page_config(page_title="Álbum Pro 2026", layout="wide")
-st.title("📋 Mi álbum WC 2026")
+st.title("📘 Gestión de Álbum 2026")
 
-user_input = st.text_input("👤 Usuario", placeholder="Tu nombre...")
+user_input = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
 user = user_input.strip().lower()
 
 if not user:
-    st.warning("Ingresa tu nombre para continuar.")
+    st.info("Ingresa tu nombre para ver tus datos.")
     st.stop()
 
 # -------------------------
@@ -47,81 +47,69 @@ response = supabase.table("album").select("*").eq("user_id", user).execute()
 data = response.data
 
 if len(data) == 0:
-    with st.spinner("Generando álbum inicial..."):
+    with st.spinner("Creando álbum inicial..."):
         all_stickers = []
-        for s_list in secciones_master.values():
-            all_stickers.extend(s_list)
-        
+        for l in secciones_master.values(): all_stickers.extend(l)
         batch = [{"user_id": user, "estampa": s, "tengo": 0, "repetidas": 0} for s in all_stickers]
-        for i in range(0, len(batch), 500):
+        for i in range(0, len(batch), 500): 
             supabase.table("album").insert(batch[i:i+500]).execute()
     st.rerun()
 
 df = pd.DataFrame(data)
 
-# -------------------------
-# MÉTRICAS
-# -------------------------
-tienes = df["tengo"].sum()
-total = len(df)
-reps_totales = df["repetidas"].sum()
+# Métricas
+t1, t2, t3 = st.columns(3)
+t1.metric("Tienes", int(df["tengo"].sum()))
+t2.metric("Repetidas Totales", int(df["repetidas"].sum()))
+t3.metric("Faltantes", int(len(df) - df["tengo"].sum()))
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Obtenidas", f"{int(tienes)} / {total}")
-c2.metric("Faltan", int(total - tienes))
-c3.metric("Total Repetidas", int(reps_totales))
-c4.metric("Progreso", f"{(tienes/total)*100:.1f}%")
+st.warning("⚠️ Recuerda darle al botón 'GUARDAR TODOS LOS CAMBIOS' al final antes de salir.")
 
 # -------------------------
-# INTERFAZ DE CHECKLIST + REPETIDAS
+# INTERFAZ CHECKLIST
 # -------------------------
-st.info("💡 Marca las que tienes y usa los números para las repetidas. ¡No olvides Guardar!")
-
-# Diccionarios para capturar cambios
 cambios_tengo = {}
 cambios_reps = {}
 
-for nombre_seccion, lista_estampas in secciones_master.items():
-    with st.expander(f"📍 {nombre_seccion}"):
-        # Usamos 4 columnas para que quepa bien el checkbox y el número
-        cols = st.columns(4) 
-        for index, s_id in enumerate(lista_estampas):
-            # Obtener datos actuales
-            row = df[df["estampa"] == s_id]
-            val_tengo = bool(row["tengo"].values[0])
-            val_reps = int(row["repetidas"].values[0])
-            
-            with cols[index % 4]:
-                st.markdown(f"**{s_id}**")
-                # Fila interna para checkbox y repetidas
-                sub_c1, sub_c2 = st.columns([1, 1.5])
-                with sub_c1:
-                    check = st.checkbox("Tengo", value=val_tengo, key=f"t_{s_id}", label_visibility="collapsed")
-                    cambios_tengo[s_id] = 1 if check else 0
-                with sub_c2:
-                    n_reps = st.number_input("Reps", min_value=0, value=val_reps, key=f"r_{s_id}", label_visibility="collapsed")
-                    cambios_reps[s_id] = n_reps
+for seccion, lista in secciones_master.items():
+    with st.expander(seccion):
+        cols = st.columns(4)
+        for i, cod in enumerate(lista):
+            # Buscar info actual
+            info = df[df["estampa"] == cod].iloc[0]
+            with cols[i % 4]:
+                st.write(f"**{cod}**")
+                c_t, c_r = st.columns([1, 1.2])
+                with c_t:
+                    t = st.checkbox("T", value=bool(info["tengo"]), key=f"t_{cod}", label_visibility="collapsed")
+                    cambios_tengo[cod] = 1 if t else 0
+                with c_r:
+                    r = st.number_input("R", min_value=0, value=int(info["repetidas"]), key=f"r_{cod}", label_visibility="collapsed")
+                    cambios_reps[cod] = r
                 st.write("---")
 
 # -------------------------
-# GUARDADO MASIVO
+# BOTÓN GUARDAR
 # -------------------------
 st.divider()
 if st.button("💾 GUARDAR TODOS LOS CAMBIOS", use_container_width=True, type="primary"):
-    with st.spinner("Sincronizando con la nube..."):
-        for s_id in cambios_tengo.keys():
-            v_tengo = cambios_tengo[s_id]
-            v_reps = cambios_reps[s_id]
+    with st.spinner("Guardando en la nube..."):
+        for cod in cambios_tengo.keys():
+            nt, nr = cambios_tengo[cod], cambios_reps[cod]
+            ot, or_old = int(df[df["estampa"] == cod]["tengo"].iloc[0]), int(df[df["estampa"] == cod]["repetidas"].iloc[0])
             
-            # Solo actualizar si algo cambió para que sea más rápido
-            old_t = int(df[df["estampa"] == s_id]["tengo"].values[0])
-            old_r = int(df[df["estampa"] == s_id]["repetidas"].values[0])
-            
-            if v_tengo != old_t or v_reps != old_r:
-                supabase.table("album").update({
-                    "tengo": v_tengo,
-                    "repetidas": v_reps
-                }).eq("user_id", user).eq("estampa", s_id).execute()
-    
-    st.success("¡Todo guardado! 🔥")
+            # Solo actualizamos si hubo cambios para que sea más rápido
+            if nt != ot or nr != or_old:
+                supabase.table("album").update({"tengo": nt, "repetidas": nr}).eq("user_id", user).eq("estampa", cod).execute()
+    st.success("¡Datos guardados! 🔥")
     st.rerun()
+
+# -------------------------
+# LISTA DE REPETIDAS
+# -------------------------
+st.subheader("🔁 Tus Repetidas")
+df_reps = df[df["repetidas"] > 0][["estampa", "repetidas"]]
+if not df_reps.empty:
+    st.table(df_reps)
+else:
+    st.write("No tienes repetidas marcadas aún.")
