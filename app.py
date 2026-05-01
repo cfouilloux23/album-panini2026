@@ -11,127 +11,116 @@ key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 supabase = create_client(url, key)
 
 # -------------------------
-# LISTA DE ESTAMPAS (GENERACIÓN AUTOMÁTICA)
+# GENERACIÓN EXACTA DE ESTAMPAS
 # -------------------------
-prefijos = [
-    "PANINI", "WC", "MEX", "RSA", "CZE", "BIH", "SUI", "MARR", "SCO", "PAR", 
+paises = [
+    "MEX", "RSA", "CZE", "BIH", "SUI", "MARR", "SCO", "PAR", 
     "TUR", "CUW", "ECU", "JPN", "TUN", "BEL", "IRN", "ESP", "KSA", "FRA", 
-    "IRQ", "ARG", "AUT", "POR", "UZB", "ENG", "GHA", "FWC", "KOR", "CAN", 
-    "QAT", "BRA", "HAI", "USA", "AUS", "GER", "CIV", "NED", "SWE", "CC", 
+    "IRQ", "ARG", "AUT", "POR", "UZB", "ENG", "GHA", "KOR", "CAN", 
+    "QAT", "BRA", "HAI", "USA", "AUS", "GER", "CIV", "NED", "SWE", 
     "EGY", "NZL", "CPV", "URU", "SEN", "NOR", "ALG", "JOR", "COD", "COL", 
     "CRO", "PAN"
 ]
 
 stickers = []
-for p in prefijos:
-    # Determinamos el límite para que no se salte números
-    # range(1, 21) genera del 1 al 20
-    if p in ["PANINI", "WC", "FWC"]:
-        limite = 20 
-    else:
-        limite = 21 
 
-    for i in range(1, limite):
-        # Lógica de nombrado: PANINI-1, PANINI-2... vs MEX1, MEX2...
-        codigo = f"{p}-{i}" if p == "PANINI" else f"{p}{i}"
-        stickers.append(codigo)
+# 1. PANINI 00 (Única en su tipo)
+stickers.append("PANINI 00")
 
-# Estampa especial inicial
-if "PANINI-00" not in stickers: 
-    stickers.insert(0, "PANINI-00")
+# 2. WC (Del 1 al 8)
+for i in range(1, 9):
+    stickers.append(f"WC {i}")
+
+# 3. FWC (Del 9 al 19)
+for i in range(9, 20):
+    stickers.append(f"FWC{i}")
+
+# 4. CC (Del 1 al 14)
+for i in range(1, 15):
+    stickers.append(f"CC{i}")
+
+# 5. Países (1 al 20)
+for p in paises:
+    for i in range(1, 21):
+        stickers.append(f"{p}{i}")
 
 # -------------------------
-# UI - INTERFAZ DE USUARIO
+# UI - INTERFAZ
 # -------------------------
 st.set_page_config(page_title="Álbum Panini PRO", page_icon="📘")
 st.title("📘 Álbum Panini PRO")
 
-user = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
+user_input = st.text_input("👤 Usuario", placeholder="Escribe tu nombre...")
+user = user_input.strip().lower()
 
 if user == "":
-    st.warning("Pon tu nombre para empezar")
+    st.warning("Escribe tu nombre para cargar tu álbum.")
     st.stop()
 
 # -------------------------
-# CARGAR DATOS DEL USUARIO
+# LÓGICA DE BASE DE DATOS
 # -------------------------
 response = supabase.table("album").select("*").eq("user_id", user).execute()
 data = response.data
 
-# -------------------------
-# SI EL USUARIO NO TIENE ÁLBUM → CREARLO (OPTIMIZADO)
-# -------------------------
+# CREACIÓN MASIVA SI EL USUARIO ES NUEVO
 if len(data) == 0:
-    with st.spinner("🚀 Generando álbum completo... esto será rápido"):
-        # Preparamos todas las filas en una lista (Bulk Insert)
-        batch_stickers = [
+    with st.spinner(f"🚀 Creando álbum de {len(stickers)} estampas para {user}..."):
+        batch = [
             {"user_id": user, "estampa": s, "tengo": 0, "repetidas": 0} 
             for s in stickers
         ]
-        
-        # Enviamos TODO de un solo golpe
-        supabase.table("album").insert(batch_stickers).execute()
-
-    st.success("¡Álbum creado exitosamente!")
-    # Recargar datos después de la inserción
+        # Inserción por bloques para estabilidad
+        for i in range(0, len(batch), 500):
+            supabase.table("album").insert(batch[i:i+500]).execute()
+            
+    st.success("¡Álbum generado con los rangos correctos!")
     response = supabase.table("album").select("*").eq("user_id", user).execute()
     data = response.data
 
 df = pd.DataFrame(data)
 
 # -------------------------
-# MÉTRICAS PRINCIPALES
+# MÉTRICAS
 # -------------------------
 tienes = df["tengo"].sum()
-total = len(df)
-faltan = total - tienes
+total_album = len(df)
+faltan = total_album - tienes
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Tienes", int(tienes))
-col2.metric("Faltan", int(faltan))
-col3.metric("% Completado", f"{(tienes/total)*100:.2f}%")
+c1, c2, c3 = st.columns(3)
+c1.metric("Tienes", int(tienes))
+c2.metric("Faltan", int(faltan))
+c3.metric("%", f"{(tienes/total_album)*100:.2f}%")
 
 # -------------------------
-# EDITAR ESTAMPAS
+# GESTIÓN
 # -------------------------
 st.divider()
-st.subheader("📝 Gestionar Estampas")
+# Orden natural para que PANINI 00 salga primero
+lista_ordenada = sorted(df["estampa"].unique(), key=lambda x: (x.split()[0] if ' ' in x else x))
+selected = st.selectbox("🔍 Buscar estampa", lista_ordenada)
 
-# Ordenamos los códigos para que sea fácil buscarlos
-lista_codigos = sorted(df["estampa"].unique())
-selected = st.selectbox("Busca o selecciona una estampa", lista_codigos)
-
-# Obtener datos de la estampa seleccionada
 row = df[df["estampa"] == selected]
 idx = row.index[0]
 
-c1, c2 = st.columns(2)
-with c1:
+col_a, col_b = st.columns(2)
+with col_a:
     tengo = st.checkbox("La tengo", value=bool(df.at[idx, "tengo"]))
-with c2:
-    reps = st.number_input("Cantidad de repetidas", value=int(df.at[idx, "repetidas"]), min_value=0)
+with col_b:
+    reps = st.number_input("Repetidas", value=int(df.at[idx, "repetidas"]), min_value=0)
 
-if st.button("Guardar cambios", use_container_width=True):
+if st.button("Guardar Cambios", use_container_width=True):
     supabase.table("album").update({
         "tengo": int(tengo),
         "repetidas": reps
     }).eq("user_id", user).eq("estampa", selected).execute()
-    
-    st.toast(f"¡{selected} actualizada!")
     st.rerun()
 
 # -------------------------
-# VISUALIZACIÓN DE TABLAS
+# TABLAS
 # -------------------------
-st.divider()
-tab1, tab2 = st.tabs(["❌ Faltantes", "🔁 Repetidas"])
-
-with tab1:
-    st.write(f"Te faltan {int(faltan)} estampas")
-    df_faltantes = df[df["tengo"] == 0][["estampa"]]
-    st.dataframe(df_faltantes, use_container_width=True, hide_index=True)
-
-with tab2:
-    df_repetidas = df[df["repetidas"] > 0][["estampa", "repetidas"]]
-    st.write(f"Tienes {len(df_repetidas)} modelos repetidos")
-    st.dataframe(df_repetidas, use_container_width=True, hide_index=True)
+t1, t2 = st.tabs(["❌ Faltantes", "🔁 Repetidas"])
+with t1:
+    st.dataframe(df[df["tengo"] == 0][["estampa"]], use_container_width=True, hide_index=True)
+with t2:
+    st.dataframe(df[df["repetidas"] > 0][["estampa", "repetidas"]], use_container_width=True, hide_index=True)
