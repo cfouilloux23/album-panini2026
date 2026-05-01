@@ -5,7 +5,7 @@ from supabase import create_client
 # -------------------------
 # CONFIG SUPABASE
 # -------------------------
-url = "https://pbogddjphxhilwiqbulq.supabase.co/rest/v1/"
+url = "https://pbogddjphxhilwiqbulq.supabase.co"
 key = "sb_publishable_ABtEce9FyxzepSoAkQstWw_zLnRbJrr"
 
 supabase = create_client(url, key)
@@ -75,7 +75,7 @@ if user == "":
 # -------------------------
 # CARGAR DATOS DEL USUARIO
 # -------------------------
-response = supabase.table("album").select("*").execute()
+response = supabase.table("album").select("*").eq("user_id", user).execute()
 data = response.data
 
 # -------------------------
